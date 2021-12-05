@@ -6,17 +6,21 @@ from OpenSSL import SSL
 from socket import socket
 
 def get_certificate(ip_address, port):
-    sock = socket()
-    sock.connect((ip_address, port))
-    ctx = SSL.Context(SSL.SSLv23_METHOD)
-    sock_ssl = SSL.Connection(ctx, sock)
-    sock_ssl.set_connect_state()
-    sock_ssl.set_tlsext_host_name(idna.encode(ip_address))
-    sock_ssl.do_handshake()
-    cert = sock_ssl.get_peer_certificate()    
-    sock_ssl.close()
-    sock.close()
-    return cert.to_cryptography()
+    try:
+        sock = socket()
+        sock.settimeout(5)
+        sock.connect((ip_address, port))
+        ctx = SSL.Context(SSL.SSLv23_METHOD)
+        sock_ssl = SSL.Connection(ctx, sock)
+        sock_ssl.set_connect_state()
+        sock_ssl.set_tlsext_host_name(idna.encode(ip_address))
+        sock_ssl.do_handshake()
+        cert = sock_ssl.get_peer_certificate()    
+        sock_ssl.close()
+        sock.close()
+        return cert.to_cryptography()
+    except Exception:
+        return None
 
 def get_alternate_names(cert):
     try:
@@ -43,6 +47,8 @@ def checkValidity(host_name, ip_address):
     # print(get_common_name(cert))
     # print('alternate names')
     # print(get_alternate_names(cert))
+    if not cert:
+        return False
 
     if (get_common_name(cert) and not get_common_name(cert).endswith(host_name)):     # Check if common name ends with host name
         valid = False   
@@ -61,16 +67,22 @@ def checkValidity(host_name, ip_address):
         return False
     return True
 
-print(checkValidity("bankofamerica.com", '171.159.228.150'))
-print ('validity for facebook')
-print(checkValidity("facebook.com", '157.240.229.35'))
-print ('validity for google')
-print(checkValidity("google.com", '172.217.15.110'))
-print ('validity for apple')
-print(checkValidity("apple.com", '23.220.132.219'))
-print ('validity for netflix.com')
-print(checkValidity("netflix.com", '54.237.226.164'))
-print ('validity for googleapis.com')
-print(checkValidity("googleapis.com", '172.217.1.202'))
-print ('validity for amazonaws.com')
-print(checkValidity("amazonaws.com", '52.217.81.80'))
+# print ('validity for bank of america')
+# print(checkValidity("bankofamerica.com", '10.0.0.1'))
+# print ('validity for facebook')
+# print(checkValidity("facebook.com", '157.240.229.35'))
+# print ('validity for google')
+# print(checkValidity("google.com", '172.217.15.110'))
+# print ('validity for apple')
+# print(checkValidity("apple.com", '23.220.132.219'))
+# print ('validity for netflix.com')
+# print(checkValidity("netflix.com", '54.237.226.164'))
+# print ('validity for googleapis.com')
+# print(checkValidity("googleapis.com", '172.217.1.202'))
+# print ('validity for amazonaws.com')
+# print(checkValidity("amazonaws.com", '52.217.81.80'))
+# print ('validity for Amazon')
+# print(checkValidity("amazon.com","54.239.17.248"))
+
+# print ('validity for  google.com')
+# print(checkValidity("google.com","142.250.73.194"))
