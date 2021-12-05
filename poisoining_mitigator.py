@@ -4,6 +4,8 @@ from datetime import datetime
 import idna
 from OpenSSL import SSL
 from socket import socket
+import time
+from timeout import timeout
 
 def get_certificate(ip_address, port):
     try:
@@ -21,7 +23,7 @@ def get_certificate(ip_address, port):
         return cert.to_cryptography()
     except BaseException as e:
         print(e.__class__)
-        print('exception occured')
+        #print('exception occured')
         return None
 
 def get_alternate_names(cert):
@@ -29,6 +31,7 @@ def get_alternate_names(cert):
         ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         return ext.value.get_values_for_type(x509.DNSName)
     except x509.ExtensionNotFound:
+        #print("except")
         return None
 
 def get_common_name(cert):
@@ -39,18 +42,17 @@ def get_common_name(cert):
         else:
             return None
     except x509.ExtensionNotFound:
+        #print("except")
         return None
 
+@timeout(5)
 def checkValidity(host_name, ip_address):
     cert = get_certificate(ip_address, 443)
     now = datetime.utcnow()
     # print (cert)
-    # print('common names')
-    # print(get_common_name(cert))
-    # print('alternate names')
-    # print(get_alternate_names(cert))
+        
     if not cert:
-        print ('certificate not found')
+        #print ('certificate not found')
         return False
 
     if (get_common_name(cert) and not get_common_name(cert).endswith(host_name)):     # Check if common name ends with host name
@@ -60,34 +62,37 @@ def checkValidity(host_name, ip_address):
                 valid = True
                 break
         if not valid:
-            print('hostname is not valid')
+            #print('hostname is not valid')
             return False
     if now < cert.not_valid_before:
-        print('not_valid_before is not valid')
+        #print('not_valid_before is not valid')
         return False
     if now > cert.not_valid_after:
-        print('not_valid_after is not valid')
+        #print('not_valid_after is not valid')
         return False
     return True
+'''
+print ('validity for oyo.om')
+print(checkValidity("oyo.com", '10.0.0.1'))
+print ('validity for imdb.com')
+print(checkValidity("imdb.com", '10.0.0.2'))
+print ('validity for stonybrook.edu')
+print(checkValidity("stonybrook.edu", '10.0.0.3'))
+print ('validity for blackboard')
+print(checkValidity("blackboard.com", '10.0.0.4'))
+print ('validity for whatsapp.com')
+print(checkValidity("whatsapp.com", '10.0.0.5'))
 
-# print ('validity for bank of america')
-# print(checkValidity("bankofamerica.com", '10.0.0.1'))
-# print ('validity for facebook')
-# print(checkValidity("facebook.com", '157.240.229.35'))
-# print ('validity for google')
-# print(checkValidity("google.com", '172.217.15.110'))
-# print ('validity for apple')
-# print(checkValidity("apple.com", '23.220.132.219'))
-# print ('validity for netflix.com')
-# print(checkValidity("netflix.com", '54.237.226.164'))
-# print ('validity for googleapis.com')
-# print(checkValidity("googleapis.com", '172.217.1.202'))
-# print ('validity for amazonaws.com')
-# print(checkValidity("amazonaws.com", '52.217.81.80'))
-# print ('validity for Amazon')
-# print(checkValidity("amazon.com","54.239.17.248"))
+print ('validity for netflix.com')
+print(checkValidity("netflix.com", '10.0.0.6'))
 
-# print ('validity for  python.org')
-# print(checkValidity("python.org","138.197.63.241"))
-print ('validity for BOFA')
-print(checkValidity("bankofamerica.com","54.163.234.74"))
+
+print ('validity for spotify.com')
+print(checkValidity("spotify.com", '10.0.0.7'))
+
+print ('validity for myshofify')
+print(checkValidity("myshopify.com","10.0.0.8"))
+
+print ('validity for  wikipedia')
+print(checkValidity("wikipedia.org","10.0.0.9"))
+'''
