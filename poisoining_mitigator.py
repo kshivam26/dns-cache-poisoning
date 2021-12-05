@@ -8,7 +8,7 @@ from socket import socket
 def get_certificate(ip_address, port):
     try:
         sock = socket()
-        sock.settimeout(5)
+        # sock.settimeout(100)
         sock.connect((ip_address, port))
         ctx = SSL.Context(SSL.SSLv23_METHOD)
         sock_ssl = SSL.Connection(ctx, sock)
@@ -19,7 +19,9 @@ def get_certificate(ip_address, port):
         sock_ssl.close()
         sock.close()
         return cert.to_cryptography()
-    except Exception:
+    except BaseException as e:
+        print(e.__class__)
+        print('exception occured')
         return None
 
 def get_alternate_names(cert):
@@ -48,6 +50,7 @@ def checkValidity(host_name, ip_address):
     # print('alternate names')
     # print(get_alternate_names(cert))
     if not cert:
+        print ('certificate not found')
         return False
 
     if (get_common_name(cert) and not get_common_name(cert).endswith(host_name)):     # Check if common name ends with host name
@@ -84,5 +87,7 @@ def checkValidity(host_name, ip_address):
 # print ('validity for Amazon')
 # print(checkValidity("amazon.com","54.239.17.248"))
 
-# print ('validity for  google.com')
-# print(checkValidity("google.com","142.250.73.194"))
+# print ('validity for  python.org')
+# print(checkValidity("python.org","138.197.63.241"))
+print ('validity for BOFA')
+print(checkValidity("bankofamerica.com","54.163.234.74"))
