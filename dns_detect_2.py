@@ -11,7 +11,7 @@ conf.sniff_promisc=True
 pcap_specified = False
 map1 = defaultdict(list)
 
-hostname_map = {"imdb.com", "stonybrook.edu", "blackboard.com","whatsapp.com", "office.com","netflix.com","spotify.com","myshopify.com","wikipedia.org"}
+hostname_map = {"www.imdb.com", "www.stonybrook.edu", "www.blackboard.com","www.whatsapp.com", "www.office.com","www.netflix.com","www.spotify.com","www.myshopify.com","www.wikipedia.org"}
 
 
 
@@ -64,9 +64,10 @@ def detect_poison2(pkt):
                     list_a1.append(str(dnsrr.rdata))
             
             if list_a1 is not None and len(list_a1)>0:
-                query_name = str(pkt[DNS].qd.qname)[str(pkt[DNS].qd.qname).index('.')+1:len(str(pkt[DNS].qd.qname))-2]
+                query1 = str(pkt[DNS].qd.qname)[2:len(str(pkt[DNS].qd.qname))-2]
                 ip_add = list_a1[0]
-                if query_name in hostname_map:
+                query_name = str(pkt[DNS].qd.qname)[str(pkt[DNS].qd.qname).index('.')+1:len(str(pkt[DNS].qd.qname))-2]
+                if query1 in hostname_map:
                     print(pkt[DNS].qd.qname)
                     print(query_name,ip_add)
                     response = checkValidity(query_name,ip_add)
@@ -75,8 +76,6 @@ def detect_poison2(pkt):
                         print("Non poisoned IP")
                     else:
                         print("Poisoned IP")
-                else:
-                    print("Pass")
 
 capture = sniff(iface = "en0" , filter = "udp port 53",prn = detect_poison2, store =0)
 capture.summary()
