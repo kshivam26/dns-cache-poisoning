@@ -1,17 +1,10 @@
 from scapy.all import *
-import datetime
-from mitigation import checkValidity
-
-
-
 
 conf.sniff_promisc=True
 pcap_specified = False
 map1 = defaultdict(list)
 
 hostname_map = {"www.imdb.com", "www.stonybrook.edu", "www.blackboard.com","www.whatsapp.com", "www.office.com","www.netflix.com","www.spotify.com","www.myshopify.com","www.wikipedia.org"}
-
-
 
 def detect_poison(pkt):
     if IP in pkt:
@@ -20,11 +13,8 @@ def detect_poison(pkt):
         if pkt.haslayer(DNSRR) and  len(pkt[Ether]) > 60 and len(pkt[UDP]) > 8:
             key = str(pkt[DNS].id) + str(pkt[DNS].qd.qname) + str(pkt[IP].sport) + ">" + str(pkt[IP].dst) + ":" + str(pkt[IP].dport)
             if key in map1 and str(pkt[IP].payload) != map1[key][0]:
-                date = datetime.datetime.fromtimestamp(pkt.time)
-                print("DNS Poisioning attempt")
                 print("TXID 0x",str(pkt[DNS].id), "Request", str(pkt[DNS].qd.qname))
-                
-                
+                print("Poisioning attempt")
                 print("Answer 1")
                 
                 if len(map1[key])>2:
