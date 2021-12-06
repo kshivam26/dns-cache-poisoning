@@ -6,7 +6,40 @@ To build an “on-path” DNS poisoner we will create a virtual machine on the s
 
 
 We will evaluate our mitigation technique on the basis of the confusion matrix. We will calculate the True Positives (i.e the packets which were poisoned and mitigated), True Negatives (i.e the packets which were not  poisoned and cached), False Positives (i.e the packets which were not  poisoned but mitigated) and False Negatives (i.e the packets which were not  poisoned but mitigated)  and we will calculate the accuracy, precision and recall on the basis of that information. At last we will implement a Chi-square on the given data to differentiate between observed frequencies and expected frequencies.
+Two Virtual machines to be installed Victim (Guest1) and attacker (Guest2)
 
+
+-----------------------------
+dnspoison.go is file for poisoning attack
+
+Run the file on attacker using : sudo go run dnspoison.go
+
+-----------------------------
+
+detection.py is a file for detecting a possible DNS spoofing attack 
+
+
+Run the file on attacker  using  : sudo python3 detection.py
+
+
+-----------------------------
+
+mitigation.py is a file for categorising IPs as Poisonous and Non-Poisonous IPs for a  possible DNS spoofing attack 
+
+
+Run the file on attacker  using  : sudo python3 detect_poison2.py
+
+
+-------------------------------
+
+On Victim (Guest1) run the browser and add any of the IP address from:
+
+{"www.imdb.com", "www.stonybrook.edu", "www.blackboard.com","www.whatsapp.com", "www.office.com","www.netflix.com","www.spotify.com","www.myshopify.com","www.wikipedia.org"}
+
+as we have spoofed for this only
+
+
+-------------------------------
 References
 https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8550085
 https://en.wikipedia.org/wiki/DNS_spoofing
